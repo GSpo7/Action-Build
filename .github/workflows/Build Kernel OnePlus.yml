@@ -834,7 +834,7 @@ jobs:
         run: |
           PATCH_DIR="${GITHUB_WORKSPACE}/kernel_workspace/Action-Build/patches"
           cd kernel_workspace/kernel_platform/common
-          for p in ./kernel/sched/hmbird* ./vendor/oplus/kernel/cpu/sched_ext/hmbird*; do
+          for p in ./kernel/sched/hmbird* ./vendor/oplus/kernel/cpu/sched_ext/hmbird* ../../vendor/oplus/kernel/cpu/sched_ext/hmbird*; do
             [ -d "$p" ] && {
               echo "源码中风驰代码已经存在，启用二次回退"
               exit 0
@@ -989,7 +989,7 @@ jobs:
         run: |
           cd kernel_workspace/kernel_platform/common
           CLEAN_FILE="${FILE//_bak/}"
-          for p in ./kernel/sched/hmbird* ./vendor/oplus/kernel/cpu/sched_ext/hmbird*; do
+          for p in ./kernel/sched/hmbird* ./vendor/oplus/kernel/cpu/sched_ext/hmbird* ../../vendor/oplus/kernel/cpu/sched_ext/hmbird*; do
             [ -d "$p" ] && {
               echo "源码中风驰代码已经存在，启用二次回退"
               exit 0
