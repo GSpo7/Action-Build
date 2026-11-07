@@ -849,7 +849,8 @@ jobs:
                   break
           if index is None:
               raise SystemExit(f"No include directive found in {path}")
-          lines.insert(index, "#include <linux/susfs_def.h>")
+          lines.insert(index, "#include <linux/cred.h>")
+          lines.insert(index + 1, "#include <linux/susfs_def.h>")
           path.write_text("\n".join(lines) + "\n")
           PY
           fi
