@@ -828,6 +828,37 @@ jobs:
             kotlin "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/SusfsCompat.kts" revert "$PWD"
           fi
 
+      - name: Fix KernelSU LSM hook for Linux 6.8+
+        if: ${{ fromJSON(env.VERSIONLEVEL) > 6 || (fromJSON(env.VERSIONLEVEL) == 6 && fromJSON(env.PATCHLEVEL) >= 8) }}
+        run: |
+          HOOK_FILE="kernel_workspace/kernel_platform/common/drivers/kernelsu/hook/lsm_hook.c"
+          python3 - "$HOOK_FILE" <<'PY'
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          source = path.read_text()
+          old_call = 'security_add_hooks(ksu_hooks, ARRAY_SIZE(ksu_hooks), "ksu");'
+          new_call = 'security_add_hooks(ksu_hooks, ARRAY_SIZE(ksu_hooks), &ksu_lsmid);'
+          if old_call not in source:
+              if new_call in source and "static const struct lsm_id ksu_lsmid" in source:
+                  print("KernelSU LSM hook already supports struct lsm_id")
+                  raise SystemExit(0)
+              raise SystemExit(f"Unsupported KernelSU LSM hook: {path}")
+
+          if "static const struct lsm_id ksu_lsmid" not in source:
+              marker = "void __init ksu_lsm_hook_init(void)"
+              if marker not in source:
+                  raise SystemExit(f"KernelSU LSM init function not found: {path}")
+              declaration = (
+                  'static const struct lsm_id ksu_lsmid = { .name = "ksu", .id = 0 };\n'
+                  "\n"
+              )
+              source = source.replace(marker, declaration + marker, 1)
+
+          path.write_text(source.replace(old_call, new_call, 1))
+          PY
+
       # OGKI转换GKI，无需修改 dtbo 开机
       - name: Apply Convert HMBIRD_OGKI to HMBIRD_GKI
         if: ${{ (fromJSON(env.VERSIONLEVEL) > 6 || (fromJSON(env.VERSIONLEVEL) == 6 && fromJSON(env.PATCHLEVEL) >= 6)) && github.event.inputs.SCHED_HMBIRD == 'false' }}
@@ -1076,7 +1107,12 @@ jobs:
 
           # SUSFS配置
           if [ "${{ github.event.inputs.SUSFS_META }}" != "-1" ]; then
+            KSU_KCONFIG=./drivers/kernelsu/Kconfig
+            if ! grep -q '^config KSU_SUSFS_PRIORITY_UID_FILTER$' "$KSU_KCONFIG"; then
+              printf '\nconfig KSU_SUSFS_PRIORITY_UID_FILTER\n\tbool "Enable SUSFS priority UID filter"\n\tdepends on KSU_SUSFS\n\tdefault y\n' >> "$KSU_KCONFIG"
+            fi
             set_config "CONFIG_KSU_SUSFS=y"
+            set_config "CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER=y"
             set_config "CONFIG_KSU_SUSFS_SUS_PATH=y"
             set_config "CONFIG_KSU_SUSFS_SUS_MAP=y"
             set_config "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
