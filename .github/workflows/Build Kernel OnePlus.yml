@@ -828,6 +828,32 @@ jobs:
             kotlin "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/SusfsCompat.kts" revert "$PWD"
           fi
 
+      - name: Fix SUSFS exec helper declaration
+        run: |
+          EXEC_FILE="kernel_workspace/kernel_platform/common/fs/exec.c"
+          SUSFS_HEADER="kernel_workspace/kernel_platform/common/include/linux/susfs_def.h"
+          SUSFS_INCLUDE_PATTERN='^[[:space:]]*#include[[:space:]]*[<"]linux/susfs_def\.h[>"]'
+          if [[ -f "$EXEC_FILE" && -f "$SUSFS_HEADER" ]] \
+            && grep -q 'susfs_is_current_proc_no_su' "$EXEC_FILE" \
+            && ! grep -qE "$SUSFS_INCLUDE_PATTERN" "$EXEC_FILE"; then
+            python3 - "$EXEC_FILE" <<'PY'
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          lines = path.read_text().splitlines()
+          index = None
+          for i, line in enumerate(lines):
+              if line.startswith("#include"):
+                  index = i
+                  break
+          if index is None:
+              raise SystemExit(f"No include directive found in {path}")
+          lines.insert(index, "#include <linux/susfs_def.h>")
+          path.write_text("\n".join(lines) + "\n")
+          PY
+          fi
+
       - name: Fix KernelSU LSM hook for Linux 6.8+
         if: ${{ fromJSON(env.VERSIONLEVEL) > 6 || (fromJSON(env.VERSIONLEVEL) == 6 && fromJSON(env.PATCHLEVEL) >= 8) }}
         run: |
@@ -1424,6 +1450,8 @@ jobs:
           chmod +x "$CC_WRAPPER"
           echo "✅ cc-wrapper 已创建: $CC_WRAPPER (clang=$REAL_CLANG_BIN)"
 
+          KSU_KERNEL_DIR="$(realpath ./common/drivers/kernelsu)"
+
           cd ./common
 
           # 重映射物理路径
@@ -1448,6 +1476,7 @@ jobs:
             PAHOLE="$PAHOLE_BIN"
             KCFLAGS="$KCFLAGS"
             KCPPFLAGS="$KCPPFLAGS"
+            KSU_KERNEL_DIR="$KSU_KERNEL_DIR"
           )
 
           if [[ -n "${CONFIG_FAKE_DISABLE:-}" ]]; then
